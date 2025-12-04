@@ -21,6 +21,40 @@
         </button>
       </div>
 
+      <label class="field" v-if="mode === 'signup'">
+        <span>이름</span>
+        <input
+          v-model.trim="name"
+          type="text"
+          placeholder="홍길동"
+          autocomplete="name"
+          required
+        />
+      </label>
+
+      <label class="field" v-if="mode === 'signup'">
+        <span>전화번호</span>
+        <input
+          v-model.trim="phone"
+          type="tel"
+          placeholder="010-0000-0000"
+          autocomplete="tel"
+          required
+        />
+      </label>
+
+      <label class="field" v-if="mode === 'signup'">
+        <span>아이디</span>
+        <input
+          v-model.trim="userId"
+          type="text"
+          placeholder="campus_user01"
+          minlength="4"
+          autocomplete="username"
+          required
+        />
+      </label>
+
       <label class="field">
         <span>이메일</span>
         <input
@@ -98,6 +132,9 @@ import { AUTH_ERROR_MESSAGES } from '@/utils/authErrorMessages'
 const router = useRouter()
 const mode = ref<'login' | 'signup'>('login')
 const email = ref('')
+const name = ref('')
+const phone = ref('')
+const userId = ref('')
 const password = ref('')
 const isEmailSubmitting = ref(false)
 const isGoogleSubmitting = ref(false)
@@ -160,6 +197,21 @@ const handleGoogleLogin = async () => {
 const handleEmailSubmit = async () => {
   if (isEmailSubmitting.value) return
 
+  if (mode.value === 'signup') {
+    if (!name.value.trim()) {
+      errorMsg.value = '이름을 입력해 주세요.'
+      return
+    }
+    if (!phone.value.trim()) {
+      errorMsg.value = '전화번호를 입력해 주세요.'
+      return
+    }
+    if (!userId.value.trim()) {
+      errorMsg.value = '아이디를 입력해 주세요.'
+      return
+    }
+  }
+
   errorMsg.value = null
   isEmailSubmitting.value = true
   try {
@@ -170,8 +222,12 @@ const handleEmailSubmit = async () => {
       await emailLogin(email.value, password.value)
       router.push({ name: 'home' })
     } else {
-      await emailSignup(email.value, password.value)
+      const trimmedUserId = userId.value.trim()
+      await emailSignup(email.value, password.value, trimmedUserId, name.value.trim(), phone.value.trim())
       alert('인증 메일을 보냈어요. 메일함을 확인한 뒤 로그인해 주세요.')
+      name.value = ''
+      phone.value = ''
+      userId.value = ''
       mode.value = 'login'
     }
   } catch (err: any) {
