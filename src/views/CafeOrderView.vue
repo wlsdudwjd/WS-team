@@ -3,22 +3,18 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { cafeStores, allCafeMenus } from './cafeData'
 import { useOrderStore } from '@/stores/orderStore'
+import { useCartStore } from '@/stores/cartStore'
 
 const route = useRoute()
 const router = useRouter()
 const orderStore = useOrderStore()
+const cartStore = useCartStore()
 
-// /cafe/:id/menu/:slug 형태라고 가정
 const currentStoreId = computed(() => route.params.id as string)
 const currentMenuSlug = computed(() => route.params.slug as string)
 
-const currentStore = computed(() =>
-  cafeStores.find((s) => s.id === currentStoreId.value),
-)
-
-const currentMenu = computed(() =>
-  allCafeMenus.find((m) => m.slug === currentMenuSlug.value),
-)
+const currentStore = computed(() => cafeStores.find((s) => s.id === currentStoreId.value))
+const currentMenu = computed(() => allCafeMenus.find((m) => m.slug === currentMenuSlug.value))
 
 const quantity = ref(1)
 const changeQuantity = (delta: number) => {
@@ -29,21 +25,35 @@ const totalPrice = computed(() =>
   currentMenu.value ? currentMenu.value.price * quantity.value : 0,
 )
 
-const handleAction = (action: 'order' | 'pay') => {
+const handleOrder = () => {
   if (!currentMenu.value) return
 
-  // 학식당과 동일한 스토어 API 사용
   orderStore.recordPurchase(
     currentMenu.value.name,
     quantity.value,
     totalPrice.value,
+    currentStore.value?.name,
+    '???',
   )
 
-  const message =
-    action === 'order' ? '주문이 접수되었습니다.' : '결제가 완료되었습니다.'
   alert(
-    `${message}\n메뉴: ${currentMenu.value.name} (${quantity.value}개)\n총액: ${totalPrice.value.toLocaleString()}원`,
+    `??? ???????.
+??: ${currentMenu.value.name} (${quantity.value}?)
+??: ${totalPrice.value.toLocaleString()}?`,
   )
+}
+
+const handleAddToCart = () => {
+  if (!currentMenu.value) return
+
+  cartStore.addItem({
+    menuName: currentMenu.value.name,
+    storeName: currentStore.value?.name,
+    price: currentMenu.value.price,
+    quantity: quantity.value,
+  })
+
+  alert('????? ?????.')
 }
 </script>
 
@@ -104,8 +114,8 @@ const handleAction = (action: 'order' | 'pay') => {
       </div>
 
       <div class="cta-buttons">
-        <button class="ghost" @click="handleAction('order')">주문하기</button>
-        <button class="primary" @click="handleAction('pay')">바로 결제</button>
+        <button class="ghost" @click="handleOrder">주문하기</button>
+        <button class="primary" @click="handleAddToCart">장바구니에 담기</button>
       </div>
     </template>
 

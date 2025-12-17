@@ -18,6 +18,7 @@ import OrdersView from '@/views/OrdersView.vue'
 import MyPageView from '@/views/MyPageView.vue'
 import RecommendView from '@/views/RecommendView.vue'
 import NotificationsView from '@/views/NotificationsView.vue'
+import CartView from '@/views/CartView.vue'
 
 // 🔹 Firebase Auth 가져오기
 import { auth } from '@/firebase/firebase'  // auth 인스턴스 export 해둔 파일
@@ -125,6 +126,12 @@ const router = createRouter({
       path: '/notifications',
       name: 'notifications',
       component: NotificationsView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/cart',
+      name: 'cart',
+      component: CartView,
       meta: { requiresAuth: true },
     },
     {

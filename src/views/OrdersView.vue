@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useOrderStore } from '@/stores/orderStore'
+import { useOrderStore, type OrderStatus } from '@/stores/orderStore'
 
 const orderStore = useOrderStore()
 const { orders } = storeToRefs(orderStore)
@@ -15,10 +15,17 @@ const ordersWithStatus = computed(() =>
 
 const filteredOrders = computed(() => {
   if (activeTab.value === '진행중') {
-    return ordersWithStatus.value.filter((o) => o.status !== '수령완료')
+    return ordersWithStatus.value.filter((o) => o.status === '진행중')
   }
   return ordersWithStatus.value
 })
+
+const getStatusLabel = (status: OrderStatus) => {
+  if (status === '진행중' && activeTab.value === '전체 내역') {
+    return '미수령'
+  }
+  return status
+}
 </script>
 
 <template>
@@ -52,7 +59,9 @@ const filteredOrders = computed(() => {
             <h3>{{ order.storeName ?? '주문' }}</h3>
             <span class="time">{{ order.orderedAt }}</span>
           </div>
-          <div class="status">수령완료</div>
+          <div class="status" :class="order.status === '진행중' ? 'status-pending' : ''">
+            {{ getStatusLabel(order.status) }}
+          </div>
           <div class="menu-line">
             <span class="code">A{{ order.id.toString().slice(-3) }}</span>
             <span class="dot">|</span>
@@ -193,6 +202,11 @@ const filteredOrders = computed(() => {
   font-weight: 700;
   font-size: 12px;
   width: fit-content;
+}
+
+.status-pending {
+  background: #fff7ed;
+  color: #ea580c;
 }
 
 .menu-line {

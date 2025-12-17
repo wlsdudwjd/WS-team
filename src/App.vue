@@ -9,7 +9,7 @@ const activeModalTab = ref<(typeof modalTabs)[number]>('카드')
 
 const navItems = [
   { id: 'home', label: '홈', icon: 'home', to: '/home', match: '/home' },
-  { id: 'coupon', label: '교환권/쿠폰', icon: 'ticket', to: '/coupons', match: '/coupons' },
+  { id: 'coupon', label: '교환권', icon: 'ticket', to: '/coupons', match: '/coupons' },
   { id: 'history', label: '주문 내역', icon: 'receipt', to: '/orders', match: '/orders' },
   { id: 'more', label: '더보기', icon: 'more', to: '/mypage', match: '/mypage' }
 ]
@@ -38,25 +38,47 @@ const closeCardModal = () => {
     <div class="screen">
       <header class="app-header">
         <div class="logo-pill">WS</div>
-        <RouterLink class="icon-button" aria-label="알림" :to="{ name: 'notifications' }">
-          <svg class="bell-icon" viewBox="0 0 24 24" role="img" aria-hidden="true">
-            <path
-              d="M12 3a5 5 0 0 0-5 5v3.38c0 .53-.21 1.03-.58 1.41l-.96 1 0 0c-.84.87-.25 2.2.94 2.2h12.78c1.19 0 1.78-1.33.94-2.2l-.01-.01-.96-1a2 2 0 0 1-.58-1.41V8a5 5 0 0 0-5-5z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M14.5 19a2.5 2.5 0 0 1-5 0"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-            />
-          </svg>
-        </RouterLink>
+        <div class="header-actions">
+          <RouterLink class="icon-button" aria-label="알림" :to="{ name: 'notifications' }">
+            <svg class="bell-icon" viewBox="0 0 24 24" role="img" aria-hidden="true">
+              <path
+                d="M12 3a5 5 0 0 0-5 5v3.38c0 .53-.21 1.03-.58 1.41l-.96 1 0 0c-.84.87-.25 2.2.94 2.2h12.78c1.19 0 1.78-1.33.94-2.2l-.01-.01-.96-1a2 2 0 0 1-.58-1.41V8a5 5 0 0 0-5-5z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M14.5 19a2.5 2.5 0 0 1-5 0"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+              />
+            </svg>
+          </RouterLink>
+          <RouterLink class="icon-button" aria-label="장바구니" :to="{ name: 'cart' }">
+            <svg class="cart-icon" viewBox="0 0 24 24" role="img" aria-hidden="true">
+              <path
+                d="M6 8h12l-.9 9.1a2 2 0 0 1-2 1.9H8.9a2 2 0 0 1-2-1.9z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M9 8V6.5A3 3 0 0 1 12 3.5a3 3 0 0 1 3 3.1V8"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+              />
+              <circle cx="10" cy="20" r="1.2" fill="currentColor" />
+              <circle cx="16" cy="20" r="1.2" fill="currentColor" />
+            </svg>
+          </RouterLink>
+        </div>
       </header>
 
       <main class="page">
@@ -263,6 +285,11 @@ const closeCardModal = () => {
   letter-spacing: 0.04em;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .icon-button {
   border: none;
   background: #ffffff;
@@ -285,7 +312,8 @@ const closeCardModal = () => {
   outline-offset: 3px;
 }
 
-.bell-icon {
+.bell-icon,
+.cart-icon {
   width: 22px;
   height: 22px;
 }

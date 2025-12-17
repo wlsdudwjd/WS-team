@@ -3,10 +3,12 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { cafeteriaCounters, type CafeteriaSlug } from './cafeteriaData'
 import { useOrderStore } from '@/stores/orderStore'
+import { useCartStore } from '@/stores/cartStore'
 
 const route = useRoute()
 const router = useRouter()
 const orderStore = useOrderStore()
+const cartStore = useCartStore()
 
 const currentSlug = computed(() => route.params.slug as CafeteriaSlug)
 const currentCounter = computed(() => cafeteriaCounters[currentSlug.value])
@@ -20,13 +22,33 @@ const changeQuantity = (delta: number) => {
 
 const totalPrice = computed(() => (currentMenu.value ? currentMenu.value.price * quantity.value : 0))
 
-const handleAction = (action: 'order' | 'pay') => {
+const handleOrder = () => {
   if (!currentMenu.value) return
 
-  orderStore.recordPurchase(currentMenu.value.name, quantity.value, totalPrice.value)
+  orderStore.recordPurchase(
+    currentMenu.value.name,
+    quantity.value,
+    totalPrice.value,
+    currentCounter.value?.title,
+    '???',
+  )
 
-  const message = action === 'order' ? '주문이 접수되었습니다.' : '결제가 완료되었습니다.'
-  alert(`${message}\n메뉴: ${currentMenu.value.name} (${quantity.value}개)\n총액: ${totalPrice.value.toLocaleString()}원`)
+  alert(
+    `??? ???????.\n??: ${currentMenu.value.name} (${quantity.value}?)\n??: ${totalPrice.value.toLocaleString()}?`,
+  )
+}
+
+const handleAddToCart = () => {
+  if (!currentMenu.value) return
+
+  cartStore.addItem({
+    menuName: currentMenu.value.name,
+    storeName: currentCounter.value?.title,
+    price: currentMenu.value.price,
+    quantity: quantity.value,
+  })
+
+  alert('????? ?????.')
 }
 </script>
 
@@ -73,8 +95,8 @@ const handleAction = (action: 'order' | 'pay') => {
       </div>
 
       <div class="cta-buttons">
-        <button class="ghost" @click="handleAction('order')">주문하기</button>
-        <button class="primary" @click="handleAction('pay')">바로 결제</button>
+        <button class="ghost" @click="handleOrder">주문하기</button>
+        <button class="primary" @click="handleAddToCart">장바구니에 담기</button>
       </div>
     </template>
 

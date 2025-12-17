@@ -6,8 +6,6 @@ import { useOrderStore } from '@/stores/orderStore'
 const orderStore = useOrderStore()
 const { coupons } = storeToRefs(orderStore)
 
-const tabs = ['교환권', '쿠폰'] as const
-const activeTab = ref<(typeof tabs)[number]>('교환권')
 const filters = ['사용가능', '기간만료'] as const
 const activeFilter = ref<(typeof filters)[number]>('사용가능')
 
@@ -28,20 +26,8 @@ const handleUseCoupon = (id: number) => {
 <template>
   <section class="coupon-page">
     <header class="page-header">
-      <h1>교환권/쿠폰</h1>
+      <h1>교환권</h1>
     </header>
-
-    <div class="tab-bar">
-      <button
-        v-for="tab in tabs"
-        :key="tab"
-        type="button"
-        :class="['tab', { active: activeTab === tab }]"
-        @click="activeTab = tab"
-      >
-        {{ tab }}
-      </button>
-    </div>
 
     <div class="filter-row">
       <div class="segmented">
@@ -62,14 +48,14 @@ const handleUseCoupon = (id: number) => {
 
     <div v-if="filteredCoupons.length === 0" class="empty-state">
       <div class="empty-icon">🎟️</div>
-      <p>보유한 {{ activeTab }}이 없습니다</p>
+      <p>보유한 교환권이 없습니다</p>
     </div>
 
     <ul v-else class="coupon-list">
       <li v-for="coupon in filteredCoupons" :key="coupon.id" class="coupon-card">
         <div>
           <h3>{{ coupon.menuName }}</h3>
-          <p>{{ coupon.storeName ?? '쿠폰' }} · {{ coupon.createdAt }} · {{ coupon.quantity }}개</p>
+          <p>{{ coupon.storeName ?? '교환권' }} · {{ coupon.createdAt }} · {{ coupon.quantity }}개</p>
         </div>
         <button
           class="coupon-button"
@@ -97,40 +83,6 @@ const handleUseCoupon = (id: number) => {
   margin: 0;
   font-size: 26px;
   font-weight: 800;
-}
-
-.tab-bar {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.tab {
-  border: none;
-  background: none;
-  padding: 10px 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: #c3cad4;
-  cursor: pointer;
-}
-
-.tab.active {
-  color: #1f2937;
-  position: relative;
-}
-
-.tab.active::after {
-  content: '';
-  position: absolute;
-  left: 24%;
-  right: 24%;
-  bottom: -6px;
-  height: 3px;
-  border-radius: 999px;
-  background: #111827;
 }
 
 .filter-row {

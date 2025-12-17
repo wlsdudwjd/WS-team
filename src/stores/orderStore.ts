@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 
+export type OrderStatus = '진행중' | '수령완료'
+
 export type OrderHistory = {
   id: number
   menuName: string
@@ -7,14 +9,17 @@ export type OrderHistory = {
   totalPrice: number
   orderedAt: string
   storeName?: string
+  status: OrderStatus
 }
+
+export type CouponStatus = '사용하기' | '사용됨'
 
 export type CouponItem = {
   id: number
   menuName: string
   createdAt: string
   quantity: number
-  status: '미사용' | '사용됨'
+  status: CouponStatus
   storeName?: string
 }
 
@@ -24,7 +29,13 @@ export const useOrderStore = defineStore('orderStore', {
     coupons: [] as CouponItem[],
   }),
   actions: {
-    recordPurchase(menuName: string, quantity: number, totalPrice: number, storeName?: string) {
+    recordPurchase(
+      menuName: string,
+      quantity: number,
+      totalPrice: number,
+      storeName?: string,
+      status: OrderStatus = '진행중',
+    ) {
       const timestamp = new Date()
       const formatted = `${timestamp.getFullYear()}-${(timestamp.getMonth() + 1)
         .toString()
@@ -40,6 +51,7 @@ export const useOrderStore = defineStore('orderStore', {
         totalPrice,
         orderedAt: formatted,
         storeName,
+        status,
       }
 
       const coupon: CouponItem = {
@@ -47,7 +59,7 @@ export const useOrderStore = defineStore('orderStore', {
         menuName,
         createdAt: formatted,
         quantity,
-        status: '미사용',
+        status: '사용하기',
         storeName,
       }
 
@@ -58,6 +70,11 @@ export const useOrderStore = defineStore('orderStore', {
       const coupon = this.coupons.find((c) => c.id === id)
       if (coupon) {
         coupon.status = '사용됨'
+      }
+
+      const order = this.orders.find((o) => o.id === id)
+      if (order) {
+        order.status = '수령완료'
       }
     },
   },
