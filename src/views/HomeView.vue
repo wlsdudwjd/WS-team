@@ -1,6 +1,7 @@
-﻿<script setup lang="ts">
-import { ref } from 'vue'
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { apiGet } from '@/utils/api'
 
 const router = useRouter()
 
@@ -11,39 +12,90 @@ const services: { id: ServiceId; label: string; description: string; emoji: stri
     id: 'cafe',
     label: '카페',
     description: '따뜻한 커피와 디저트',
-    emoji: '☕️',
+    emoji: '☕',
   },
   {
     id: 'cafeteria',
     label: '학식',
     description: '든든한 학생 식당',
-    emoji: '🍝',
+    emoji: '🍱',
   },
 ]
 
 type RankItem = {
   name: string
   likes: number
+  storeName?: string | null
 }
 
-// 임시 인기 메뉴 (추후 백엔드 연동 예정)
-const topCafe = ref<RankItem[]>([
-  { name: '아메리카노', likes: 32 },
-  { name: '딸기라떼', likes: 27 },
-  { name: '레몬에이드', likes: 22 },
-  { name: '티라미수', likes: 18 },
-  { name: '카페라떼', likes: 14 },
-])
+type PopularMenuResponse = {
+  menuId: number
+  name: string
+  price: number
+  description?: string
+  storeId: number | null
+  storeName: string | null
+  likeCount: number
+}
 
-const topCafeteria = ref<RankItem[]>([
-  { name: '제육볶음', likes: 44 },
-  { name: '김치찌개', likes: 38 },
-  { name: '돈까스', likes: 33 },
-  { name: '비빔밥', likes: 27 },
-  { name: '치즈라면', likes: 22 },
-])
+type StoreResponse = {
+  storeId: number
+  name: string
+  serviceType: {
+    serviceTypeId: number
+    name: string
+  }
+}
 
-// 추천 메뉴 페이지 이동
+const topCafe = ref<RankItem[]>([])
+const topCafeteria = ref<RankItem[]>([])
+const loadingTop = ref(false)
+const topError = ref<string | null>(null)
+
+const storeTypeById = ref<Record<number, string>>({})
+
+const fetchStores = async () => {
+  const data = await apiGet<StoreResponse[]>('/api/stores')
+  storeTypeById.value = data.reduce<Record<number, string>>((acc, store) => {
+    acc[store.storeId] = store.serviceType?.name ?? ''
+    return acc
+  }, {})
+}
+
+const fetchTopMenus = async () => {
+  loadingTop.value = true
+  topError.value = null
+  try {
+    await fetchStores()
+    const data = await apiGet<PopularMenuResponse[]>('/api/menu-likes/top?limit=5')
+
+    const cafes: RankItem[] = []
+    const cafeterias: RankItem[] = []
+
+    data.forEach((item) => {
+      const serviceType = item.storeId ? storeTypeById.value[item.storeId] : ''
+      const target = serviceType?.toLowerCase().includes('cafeteria') ? cafeterias : cafes
+      target.push({
+        name: item.name,
+        likes: item.likeCount ?? 0,
+        storeName: item.storeName ?? undefined,
+      })
+    })
+
+    topCafe.value = cafes
+    topCafeteria.value = cafeterias
+  } catch (err) {
+    console.error(err)
+    topCafe.value = []
+    topCafeteria.value = []
+    topError.value = '추천이 아직 없습니다.'
+  } finally {
+    loadingTop.value = false
+  }
+}
+
+onMounted(fetchTopMenus)
+
 const goRecommend = (type: 'cafe' | 'cafeteria') => {
   router.push(`/recommend/${type}`)
 }
@@ -54,7 +106,6 @@ const goRecommend = (type: 'cafe' | 'cafeteria') => {
     <p class="eyebrow">오늘의 추천</p>
     <h1 class="question">어떤 서비스를 이용하러 오셨나요?</h1>
 
-    <!-- 서비스 선택 카드 (원래 UI) -->
     <div class="service-grid">
       <button
         v-for="service in services"
@@ -74,7 +125,6 @@ const goRecommend = (type: 'cafe' | 'cafeteria') => {
       </button>
     </div>
 
-    <!-- 메뉴 추천하기 버튼 영역 -->
     <section class="recommend-area">
       <h2>메뉴 추천하기</h2>
 
@@ -88,28 +138,32 @@ const goRecommend = (type: 'cafe' | 'cafeteria') => {
       </div>
     </section>
 
-    <!-- 오늘의 인기 메뉴 랭킹 -->
     <section class="ranking-board">
       <h2>🔥 오늘의 인기 메뉴 Top 5</h2>
 
-      <h3 class="rank-title">☕ 카페</h3>
-      <ul class="rank-list">
-        <li v-for="item in topCafe" :key="item.name">
-          <span>{{ item.name }}</span>
-          <strong>{{ item.likes }} 👍</strong>
-        </li>
-      </ul>
+      <div v-if="loadingTop" class="rank-empty">불러오는 중...</div>
+      <div v-else-if="topError || (!topCafe.length && !topCafeteria.length)" class="rank-empty">
+        {{ topError ?? '추천이 아직 없습니다.' }}
+      </div>
+      <template v-else>
+        <h3 v-if="topCafe.length" class="rank-title">☕ 카페</h3>
+        <ul v-if="topCafe.length" class="rank-list">
+          <li v-for="item in topCafe" :key="item.name">
+            <span>{{ item.name }}</span>
+            <strong>{{ item.likes }} 👍</strong>
+          </li>
+        </ul>
 
-      <h3 class="rank-title">🍱 학식</h3>
-      <ul class="rank-list">
-        <li v-for="item in topCafeteria" :key="item.name">
-          <span>{{ item.name }}</span>
-          <strong>{{ item.likes }} 👍</strong>
-        </li>
-      </ul>
+        <h3 v-if="topCafeteria.length" class="rank-title">🍱 학식</h3>
+        <ul v-if="topCafeteria.length" class="rank-list">
+          <li v-for="item in topCafeteria" :key="item.name">
+            <span>{{ item.name }}</span>
+            <strong>{{ item.likes }} 👍</strong>
+          </li>
+        </ul>
+      </template>
     </section>
 
-    <!-- 기존 프로모션 배너 -->
     <section class="promo-board" aria-label="프로모션">
       <p class="promo-main">
         <span class="highlight">천원의 아침</span> 학생할인은
@@ -128,7 +182,6 @@ const goRecommend = (type: 'cafe' | 'cafeteria') => {
   max-width: 960px;
 }
 
-/* 상단 텍스트 */
 .eyebrow {
   font-size: 0.85rem;
   color: #8a8f98;
@@ -142,7 +195,6 @@ const goRecommend = (type: 'cafe' | 'cafeteria') => {
   margin: 0;
 }
 
-/* 서비스 카드 영역 */
 .service-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -194,7 +246,6 @@ const goRecommend = (type: 'cafe' | 'cafeteria') => {
   line-height: 1;
 }
 
-/* 메뉴 추천하기 영역 */
 .recommend-area h2 {
   margin: 0 0 12px;
   font-size: 1.2rem;
@@ -225,7 +276,6 @@ const goRecommend = (type: 'cafe' | 'cafeteria') => {
   color: #4a7c2c;
 }
 
-/* 인기 메뉴 랭킹 */
 .ranking-board {
   background: #ffffff;
   padding: 20px;
@@ -257,7 +307,12 @@ const goRecommend = (type: 'cafe' | 'cafeteria') => {
   border-bottom: none;
 }
 
-/* 하단 프로모션 배너 */
+.rank-empty {
+  padding: 12px 0;
+  color: #8a8f98;
+  font-size: 0.95rem;
+}
+
 .promo-board {
   margin-top: 8px;
   border-radius: clamp(26px, 3vw, 36px);

@@ -1,19 +1,55 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { cafeteriaCounters } from './cafeteriaData'
-import { cafeCategories, cafeStores } from './cafeData'
-import { useLikeStore, type MenuKind } from '@/stores/likestore'
+import { apiGet, apiPost } from '@/utils/api'
 
-// 스토어
-const likeStore = useLikeStore()
+type MenuKind = 'cafeteria' | 'cafe'
+type Filter = 'all' | 'cafeteria' | 'cafe'
+
+type MenuResponse = {
+  menuId: number
+  name: string
+  price: number
+  description?: string
+  store?: {
+    storeId: number
+    name: string
+    serviceType?: {
+      serviceTypeId: number
+      name: string
+    }
+  }
+}
+
+type LikeCountResponse = {
+  menuId: number
+  likeCount: number
+}
+
+type RecommendItem = {
+  menuId: number
+  menuName: string
+  sourceName: string
+  kind: MenuKind
+}
+
 const route = useRoute()
 
-// 탭: 전체 / 학식 / 카페
-type Filter = 'all' | 'cafeteria' | 'cafe'
 const currentFilter = ref<Filter>('all')
+const menus = ref<RecommendItem[]>([])
+const likeCounts = ref<Record<number, number>>({})
+const loading = ref(false)
+const error = ref<string | null>(null)
 
-// ▶ URL 파라미터(filter)에 따라 초기 탭 세팅
+const ensureUserEmail = () => {
+  const stored = localStorage.getItem('ws_user_email')
+  if (stored) return stored
+  const fallback = `guest-${Date.now()}@example.com`
+  localStorage.setItem('ws_user_email', fallback)
+  return fallback
+}
+const userEmail = ref(ensureUserEmail())
+
 const applyRouteFilter = () => {
   const raw = route.params.filter as string | undefined
   if (raw === 'cafeteria' || raw === 'cafe' || raw === 'all') {
@@ -23,88 +59,77 @@ const applyRouteFilter = () => {
   }
 }
 
-// 첫 진입 시 1번 적용
 applyRouteFilter()
 
-// 주소 바뀌면 다시 적용 (예: /recommend → /recommend/cafe)
 watch(
   () => route.params.filter,
-  () => applyRouteFilter()
+  () => applyRouteFilter(),
 )
 
-// 학식 메뉴 평탄화
-const cafeteriaMenus = computed(() => {
-  const result: {
-    kind: MenuKind
-    menuSlug: string
-    menuName: string
-    sourceName: string
-  }[] = []
+const fetchMenus = async () => {
+  const data = await apiGet<MenuResponse[]>('/api/menus')
 
-  for (const counter of Object.values(cafeteriaCounters)) {
-    for (const menu of counter.menus) {
-      result.push({
-        kind: 'cafeteria',
-        menuSlug: `cafeteria-${menu.slug}`,
-        menuName: menu.name,
-        sourceName: counter.title,
-      })
+  menus.value = data.map((menu) => {
+    const serviceName = menu.store?.serviceType?.name?.toLowerCase() ?? ''
+    const kind: MenuKind = serviceName.includes('cafeteria') ? 'cafeteria' : 'cafe'
+    return {
+      menuId: menu.menuId,
+      menuName: menu.name,
+      sourceName: menu.store?.name ?? '',
+      kind,
     }
+  })
+}
+
+const fetchLikeCounts = async () => {
+  const data = await apiGet<LikeCountResponse[]>('/api/menu-likes/counts')
+  likeCounts.value = data.reduce<Record<number, number>>((acc, row) => {
+    acc[row.menuId] = row.likeCount ?? 0
+    return acc
+  }, {})
+}
+
+const refreshData = async () => {
+  loading.value = true
+  error.value = null
+  try {
+    await fetchMenus()
+    await fetchLikeCounts()
+  } catch (err) {
+    console.error(err)
+    error.value = '추천 메뉴를 불러오지 못했습니다.'
+  } finally {
+    loading.value = false
   }
+}
 
-  return result
-})
-
-// 카페 메뉴 평탄화
-const cafeMenus = computed(() => {
-  const storeName =
-    cafeStores.find((s) => s.id === 'hus')?.name ?? '쿱카페'
-
-  const result: {
-    kind: MenuKind
-    menuSlug: string
-    menuName: string
-    sourceName: string
-  }[] = []
-
-  for (const category of cafeCategories) {
-    for (const menu of category.menus) {
-      result.push({
-        kind: 'cafe',
-        menuSlug: `cafe-${menu.slug}`,
-        menuName: menu.name,
-        sourceName: `${storeName} · ${category.title}`,
-      })
-    }
-  }
-
-  return result
-})
-
-const allMenus = computed(() => [...cafeteriaMenus.value, ...cafeMenus.value])
+onMounted(refreshData)
 
 const filteredMenus = computed(() => {
   if (currentFilter.value === 'cafeteria') {
-    return cafeteriaMenus.value
+    return menus.value.filter((m) => m.kind === 'cafeteria')
   }
   if (currentFilter.value === 'cafe') {
-    return cafeMenus.value
+    return menus.value.filter((m) => m.kind === 'cafe')
   }
-  return allMenus.value
+  return menus.value
 })
 
-const getLikeCount = (kind: MenuKind, menuSlug: string) => {
-  const key = `${kind}:${menuSlug}`
-  return likeStore.items[key]?.likes ?? 0
-}
+const getLikeCount = (menuId: number) => likeCounts.value[menuId] ?? 0
 
-const handleLike = (item: {
-  kind: MenuKind
-  menuSlug: string
-  menuName: string
-  sourceName: string
-}) => {
-  likeStore.like(item)
+const handleLike = async (item: RecommendItem) => {
+  try {
+    await apiPost('/api/menu-likes', {
+      userEmail: userEmail.value,
+      menuId: item.menuId,
+    })
+    likeCounts.value[item.menuId] = (likeCounts.value[item.menuId] ?? 0) + 1
+    // 홈 Top5 반영용 최신 데이터도 가져옴
+    await fetchLikeCounts()
+  } catch (err) {
+    console.error(err)
+    error.value = '추천에 실패했습니다.'
+  }
 }
 </script>
 
@@ -113,12 +138,11 @@ const handleLike = (item: {
     <header class="header">
       <h1>메뉴 추천하기</h1>
       <p class="sub">
-        학식 · 카페 메뉴 중 마음에 드는 메뉴에 좋아요를 눌러 주세요.
-        홈 화면에서 인기 메뉴 순위를 보여줍니다.
+        학식 · 카페 메뉴 중 마음에 드는 메뉴에 좋아요를 눌러 주세요. 홈 화면에서 인기 메뉴 순위를 보여줍니다.
       </p>
     </header>
 
-    <!-- 필터 탭 -->
+    <!-- 탭 -->
     <div class="tabs">
       <button
         class="tab"
@@ -143,22 +167,19 @@ const handleLike = (item: {
       </button>
     </div>
 
-    <!-- 메뉴 리스트 -->
-    <ul class="menu-list">
-      <li
-        v-for="item in filteredMenus"
-        :key="item.menuSlug"
-        class="menu-row"
-      >
+    <div v-if="loading" class="sub">불러오는 중...</div>
+    <div v-else-if="error" class="sub error">{{ error }}</div>
+    <ul v-else class="menu-list">
+      <li v-for="item in filteredMenus" :key="item.menuId" class="menu-row">
         <div class="menu-info">
           <p class="menu-name">{{ item.menuName }}</p>
           <p class="menu-source">{{ item.sourceName }}</p>
         </div>
 
         <button class="like-btn" @click="handleLike(item)">
-          <span class="heart">♥</span>
+          <span class="heart">👍</span>
           <span class="count">
-            {{ getLikeCount(item.kind, item.menuSlug) }}
+            {{ getLikeCount(item.menuId) }}
           </span>
         </button>
       </li>
@@ -184,6 +205,9 @@ const handleLike = (item: {
   margin: 0;
   font-size: 13px;
   color: #6b7280;
+}
+.sub.error {
+  color: #ef4444;
 }
 
 .tabs {
