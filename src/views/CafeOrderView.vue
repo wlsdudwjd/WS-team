@@ -33,13 +33,13 @@ const handleOrder = () => {
     quantity.value,
     totalPrice.value,
     currentStore.value?.name,
-    '???',
+    '진행중',
   )
 
   alert(
-    `??? ???????.
-??: ${currentMenu.value.name} (${quantity.value}?)
-??: ${totalPrice.value.toLocaleString()}?`,
+    `주문이 완료되었습니다.
+메뉴: ${currentMenu.value.name} (${quantity.value}개)
+가격: ${totalPrice.value.toLocaleString()}원`,
   )
 }
 
