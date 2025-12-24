@@ -1,15 +1,33 @@
+<script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useNotificationStore } from '@/stores/notificationStore'
+
+const router = useRouter()
+const notificationStore = useNotificationStore()
+const { items } = storeToRefs(notificationStore)
+const { reload } = notificationStore
+
+onMounted(() => {
+  reload()
+})
+</script>
+
 <template>
   <section class="notifications">
     <header class="top-bar">
       <button class="back-button" type="button" aria-label="뒤로가기" @click="router.back()">
-        ‹
+        ←
       </button>
       <h1>알림</h1>
       <span class="spacer" aria-hidden="true"></span>
     </header>
 
-    <ul class="list">
-      <li v-for="item in notifications" :key="item.id" class="list-item">
+    <p v-if="!items.length" class="empty">알림이 없습니다.</p>
+
+    <ul v-else class="list">
+      <li v-for="item in items" :key="item.id" class="list-item">
         <div class="icon">
           <span class="icon-mark">!</span>
         </div>
@@ -22,69 +40,6 @@
     </ul>
   </section>
 </template>
-
-<script setup lang="ts">
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
-const notifications = [
-  {
-    id: 1,
-    title: '상품이 수령되었습니다.',
-    message: '이용해주셔서 감사합니다',
-    time: '2025-06-04 12:50:18',
-  },
-  {
-    id: 2,
-    title: '주문 준비가 완료되었습니다.',
-    message: '주문하신 상품이 준비되었습니다.',
-    time: '2025-06-04 12:50:08',
-  },
-  {
-    id: 3,
-    title: '주문이 수락되었습니다.',
-    message: '매장에서 상품 준비를 시작했습니다.',
-    time: '2025-06-04 12:50:08',
-  },
-  {
-    id: 4,
-    title: '상품이 수령되었습니다.',
-    message: '이용해주셔서 감사합니다',
-    time: '2025-03-12 13:15:16',
-  },
-  {
-    id: 5,
-    title: '주문 준비가 완료되었습니다.',
-    message: '주문하신 상품이 준비되었습니다.',
-    time: '2025-03-12 13:15:06',
-  },
-  {
-    id: 6,
-    title: '주문이 수락되었습니다.',
-    message: '매장에서 상품 준비를 시작했습니다.',
-    time: '2025-03-12 13:15:06',
-  },
-  {
-    id: 7,
-    title: '상품이 수령되었습니다.',
-    message: '이용해주셔서 감사합니다',
-    time: '2024-11-29 12:47:32',
-  },
-  {
-    id: 8,
-    title: '주문 준비가 완료되었습니다.',
-    message: '주문하신 상품이 준비되었습니다.',
-    time: '2024-11-29 12:47:21',
-  },
-  {
-    id: 9,
-    title: '주문이 수락되었습니다.',
-    message: '매장에서 상품 준비를 시작했습니다.',
-    time: '2024-11-29 12:47:21',
-  },
-]
-</script>
 
 <style scoped>
 .notifications {
@@ -114,13 +69,19 @@ const notifications = [
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.06);
-  font-size: 24px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
 }
 
 .spacer {
   display: block;
+}
+
+.empty {
+  margin: 12px 0 0;
+  color: #6b7280;
+  font-size: 14px;
 }
 
 .list {
