@@ -104,7 +104,6 @@
       <p v-if="errorMsg" style="margin-top: 8px; color: #ef4444; font-size: 13px;">
         {{ errorMsg }}
       </p>
-
     </form>
 
     <div class="divider">
@@ -143,6 +142,12 @@ const errorMsg = ref<string | null>(null)
 const rememberEmail = ref(false)
 const keepLoggedIn = ref(true)
 
+const persistUserEmail = (emailValue: string | null | undefined) => {
+  if (emailValue) {
+    localStorage.setItem('ws_user_email', emailValue)
+  }
+}
+
 const emailButtonLabel = computed(() =>
   mode.value === 'login' ? '이메일로 로그인' : '이메일로 회원가입'
 )
@@ -180,13 +185,14 @@ const handleGoogleLogin = async () => {
   errorMsg.value = null
   isGoogleSubmitting.value = true
   try {
-    await setAuthPersistence(keepLoggedIn.value ? 'local' : 'session')
-    persistPreferences()
-    await googleLogin()
+    const user = await googleLogin()
+    const idToken = await user.getIdToken()
+    await apiPost('/api/auth/firebase-login', { idToken })
+    persistUserEmail(user.email)
     router.push({ name: 'home' })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(err)
-    const code = err?.code as string | undefined
+    const code = (err as { code?: string } | undefined)?.code
     errorMsg.value =
       (code && AUTH_ERROR_MESSAGES[code]) ||
       '구글 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.'
@@ -220,45 +226,39 @@ const handleEmailSubmit = async () => {
     persistPreferences()
 
     if (mode.value === 'login') {
-      await emailLogin(email.value, password.value)
-      // DB에 이미 계정이 없는 경우를 감지해 안내
-      try {
-        await apiPost('/api/auth/login', { email: email.value, password: password.value })
-      } catch (err: any) {
-        if (err?.status === 404) {
-          errorMsg.value =
-            'DB에 프로필이 없습니다. 이메일 회원가입으로 계정을 먼저 만들어 주세요.'
-          return
-        }
-        throw err
-      }
+      const user = await emailLogin(email.value, password.value)
+      const idToken = await user.getIdToken()
+      await apiPost('/api/auth/firebase-login', { idToken })
+      persistUserEmail(user.email ?? email.value)
       router.push({ name: 'home' })
     } else {
       const trimmedUsername = username.value.trim()
       const trimmedName = name.value.trim()
       const trimmedPhone = phone.value.trim()
 
-      // 1) Firebase Auth 계정 생성
-      await emailSignup(email.value, password.value, trimmedUsername, trimmedName, trimmedPhone)
+      // 1) Firebase Auth에 계정 생성
+      const user = await emailSignup(
+        email.value,
+        password.value,
+        trimmedUsername,
+        trimmedName,
+        trimmedPhone
+      )
 
-      // 2) 백엔드 DB에도 회원 정보 저장 (username 필드 포함)
-      await apiPost('/api/auth/signup', {
-        username: trimmedUsername,
-        email: email.value,
-        password: password.value,
-        name: trimmedName,
-        phone: trimmedPhone,
-      })
+      // 2) Firebase ID token으로 백엔드 로그인 처리
+      const idToken = await user.getIdToken()
+      await apiPost('/api/auth/firebase-login', { idToken })
+      persistUserEmail(user.email ?? email.value)
 
-      alert('인증 메일을 보냈어요. 메일함을 확인한 뒤 로그인해 주세요.')
+      alert('인증 메일을 보냈어요. 메일을 확인한 뒤 로그인해 주세요.')
       name.value = ''
       phone.value = ''
       username.value = ''
       mode.value = 'login'
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(err)
-    const code = err?.code as string | undefined
+    const code = (err as { code?: string } | undefined)?.code
     errorMsg.value =
       (code && AUTH_ERROR_MESSAGES[code]) ||
       '이메일 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.'

@@ -21,9 +21,10 @@ type MenuResponse = {
   }
 }
 
-type LikeCountResponse = {
+type MenuLikeStatus = {
   menuId: number
-  likeCount: number
+  liked: boolean
+  totalLikes: number
 }
 
 type RecommendItem = {
@@ -37,7 +38,8 @@ const route = useRoute()
 
 const currentFilter = ref<Filter>('all')
 const menus = ref<RecommendItem[]>([])
-const likeCounts = ref<Record<number, number>>({})
+const likeStatuses = ref<Record<number, MenuLikeStatus>>({})
+const myLikeCounts = ref<Record<number, number>>({})
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -49,6 +51,26 @@ const ensureUserEmail = () => {
   return fallback
 }
 const userEmail = ref(ensureUserEmail())
+const myLikesStorageKey = computed(() => `ws_my_likes_${userEmail.value}`)
+
+const loadMyLikeCounts = () => {
+  try {
+    const raw = localStorage.getItem(myLikesStorageKey.value)
+    if (!raw) return
+    const parsed = JSON.parse(raw) as Record<number, number>
+    myLikeCounts.value = parsed
+  } catch (err) {
+    console.error('내 좋아요 카운트 로드 실패', err)
+  }
+}
+
+const persistMyLikeCounts = () => {
+  try {
+    localStorage.setItem(myLikesStorageKey.value, JSON.stringify(myLikeCounts.value))
+  } catch (err) {
+    console.error('내 좋아요 카운트 저장 실패', err)
+  }
+}
 
 const applyRouteFilter = () => {
   const raw = route.params.filter as string | undefined
@@ -71,7 +93,12 @@ const fetchMenus = async () => {
 
   menus.value = data.map((menu) => {
     const serviceName = menu.store?.serviceType?.name?.toLowerCase() ?? ''
-    const kind: MenuKind = serviceName.includes('cafeteria') ? 'cafeteria' : 'cafe'
+    const serviceTypeId = menu.store?.serviceType?.serviceTypeId
+    const kind: MenuKind =
+      serviceTypeId === 2 || serviceName.includes('cafeteria')
+        ? 'cafeteria'
+        : 'cafe'
+
     return {
       menuId: menu.menuId,
       menuName: menu.name,
@@ -81,10 +108,14 @@ const fetchMenus = async () => {
   })
 }
 
-const fetchLikeCounts = async () => {
-  const data = await apiGet<LikeCountResponse[]>('/api/menu-likes/counts')
-  likeCounts.value = data.reduce<Record<number, number>>((acc, row) => {
-    acc[row.menuId] = row.likeCount ?? 0
+const fetchLikeStatuses = async () => {
+  if (!menus.value.length) return
+  const ids = menus.value.map((m) => m.menuId).join(',')
+  const data = await apiGet<MenuLikeStatus[]>(
+    `/api/menu-likes/status?userEmail=${encodeURIComponent(userEmail.value)}&menuIds=${ids}`,
+  )
+  likeStatuses.value = data.reduce<Record<number, MenuLikeStatus>>((acc, row) => {
+    acc[row.menuId] = row
     return acc
   }, {})
 }
@@ -94,7 +125,7 @@ const refreshData = async () => {
   error.value = null
   try {
     await fetchMenus()
-    await fetchLikeCounts()
+    await fetchLikeStatuses()
   } catch (err) {
     console.error(err)
     error.value = '추천 메뉴를 불러오지 못했습니다.'
@@ -104,6 +135,7 @@ const refreshData = async () => {
 }
 
 onMounted(refreshData)
+onMounted(loadMyLikeCounts)
 
 const filteredMenus = computed(() => {
   if (currentFilter.value === 'cafeteria') {
@@ -115,7 +147,8 @@ const filteredMenus = computed(() => {
   return menus.value
 })
 
-const getLikeCount = (menuId: number) => likeCounts.value[menuId] ?? 0
+// 추천하기 탭은 사용자별 상태를 보여주므로 내 누적 횟수만 표시
+const getMyLikeCount = (menuId: number) => myLikeCounts.value[menuId] ?? 0
 
 const handleLike = async (item: RecommendItem) => {
   try {
@@ -123,12 +156,16 @@ const handleLike = async (item: RecommendItem) => {
       userEmail: userEmail.value,
       menuId: item.menuId,
     })
-    likeCounts.value[item.menuId] = (likeCounts.value[item.menuId] ?? 0) + 1
-    // 홈 Top5에 반영될 수 있도록 최신 데이터도 다시 조회
-    await fetchLikeCounts()
+    myLikeCounts.value[item.menuId] = (myLikeCounts.value[item.menuId] ?? 0) + 1
+    persistMyLikeCounts()
+    likeStatuses.value[item.menuId] = {
+      menuId: item.menuId,
+      liked: true,
+      totalLikes: (likeStatuses.value[item.menuId]?.totalLikes ?? 0) + 1, // 전역 총합(참고용)
+    }
   } catch (err) {
     console.error(err)
-    error.value = '좋아요 반영에 실패했습니다.'
+    error.value = '추천 반영에 실패했습니다.'
   }
 }
 </script>
@@ -177,7 +214,7 @@ const handleLike = async (item: RecommendItem) => {
         <button class="like-btn" @click="handleLike(item)">
           <span class="heart">👍</span>
           <span class="count">
-            {{ getLikeCount(item.menuId) }}
+            {{ getMyLikeCount(item.menuId) }}
           </span>
         </button>
       </li>
