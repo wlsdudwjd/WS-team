@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useOrderStore, type OrderStatus } from '@/stores/orderStore'
 
@@ -26,6 +26,10 @@ const getStatusLabel = (status: OrderStatus) => {
   }
   return status
 }
+
+onMounted(() => {
+  orderStore.reload()
+})
 </script>
 
 <template>

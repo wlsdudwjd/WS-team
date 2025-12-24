@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useOrderStore } from '@/stores/orderStore'
 
@@ -21,6 +21,10 @@ const totalText = computed(() => `총 ${filteredCoupons.value.length}개`)
 const handleUseCoupon = (id: number) => {
   orderStore.useCoupon(id)
 }
+
+onMounted(() => {
+  orderStore.reload()
+})
 </script>
 
 <template>
