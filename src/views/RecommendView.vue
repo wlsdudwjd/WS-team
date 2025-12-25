@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { apiGet, apiPost } from '@/utils/api'
+import { apiGet, apiPost, type ApiError } from '@/utils/api'
 
 type MenuKind = 'cafeteria' | 'cafe'
 type Filter = 'all' | 'cafeteria' | 'cafe'
@@ -34,6 +34,14 @@ type RecommendItem = {
   kind: MenuKind
 }
 
+type MenuPageResponse = {
+  content: MenuResponse[]
+  totalPages: number
+  totalElements?: number
+  number?: number
+  size?: number
+}
+
 const route = useRoute()
 
 const currentFilter = ref<Filter>('all')
@@ -42,6 +50,18 @@ const likeStatuses = ref<Record<number, MenuLikeStatus>>({})
 const myLikeCounts = ref<Record<number, number>>({})
 const loading = ref(false)
 const error = ref<string | null>(null)
+
+const filters = reactive({
+  serviceTypeId: '', // 탭으로 설정
+  q: '', // 메뉴 이름 검색
+})
+
+const pagination = reactive({
+  page: 0,
+  size: 10, // 고정
+  totalPages: 0,
+  totalElements: 0,
+})
 
 const ensureUserEmail = () => {
   const stored = localStorage.getItem('ws_user_email')
@@ -72,12 +92,24 @@ const persistMyLikeCounts = () => {
   }
 }
 
+const setTabFilter = (filter: Filter) => {
+  currentFilter.value = filter
+  if (filter === 'cafeteria') {
+    filters.serviceTypeId = '2' // 학식
+  } else if (filter === 'cafe') {
+    filters.serviceTypeId = '1' // 카페
+  } else {
+    filters.serviceTypeId = ''
+  }
+  pagination.page = 0
+}
+
 const applyRouteFilter = () => {
   const raw = route.params.filter as string | undefined
   if (raw === 'cafeteria' || raw === 'cafe' || raw === 'all') {
-    currentFilter.value = raw
+    setTabFilter(raw)
   } else {
-    currentFilter.value = 'all'
+    setTabFilter('all')
   }
 }
 
@@ -85,13 +117,26 @@ applyRouteFilter()
 
 watch(
   () => route.params.filter,
-  () => applyRouteFilter(),
+  () => {
+    applyRouteFilter()
+    refreshData()
+  },
 )
 
-const fetchMenus = async () => {
-  const data = await apiGet<MenuResponse[]>('/api/menus')
+const buildQueryParams = () => {
+  const params = new URLSearchParams()
+  if (filters.serviceTypeId.trim()) params.append('serviceTypeId', filters.serviceTypeId.trim())
+  if (filters.q.trim()) params.append('q', filters.q.trim())
+  params.append('page', String(pagination.page))
+  params.append('size', String(pagination.size || 10))
+  return params.toString()
+}
 
-  menus.value = data.map((menu) => {
+const fetchMenus = async () => {
+  const query = buildQueryParams()
+  const data = await apiGet<MenuPageResponse>(`/api/menus?${query}`)
+
+  menus.value = (data.content ?? []).map((menu) => {
     const serviceName = menu.store?.serviceType?.name?.toLowerCase() ?? ''
     const serviceTypeId = menu.store?.serviceType?.serviceTypeId
     const kind: MenuKind =
@@ -106,6 +151,11 @@ const fetchMenus = async () => {
       kind,
     }
   })
+
+  pagination.totalPages = data.totalPages ?? (menus.value.length ? 1 : 0)
+  pagination.totalElements = data.totalElements ?? menus.value.length
+  pagination.page = data.number ?? pagination.page
+  pagination.size = data.size ?? pagination.size
 }
 
 const fetchLikeStatuses = async () => {
@@ -135,7 +185,8 @@ const refreshData = async () => {
     await fetchLikeStatuses()
   } catch (err) {
     console.error(err)
-    error.value = '추천 메뉴를 불러오지 못했습니다.'
+    const apiErr = err as ApiError
+    error.value = apiErr?.userMessage || '추천 메뉴를 불러오지 못했습니다.'
   } finally {
     loading.value = false
   }
@@ -175,6 +226,28 @@ const handleLike = async (item: RecommendItem) => {
     error.value = '추천 반영에 실패했습니다.'
   }
 }
+
+const handleFilterSubmit = () => {
+  pagination.page = 0
+  refreshData()
+}
+
+const goToPage = (page: number) => {
+  const maxPageIndex = pagination.totalPages ? pagination.totalPages - 1 : 0
+  if (page < 0 || page > maxPageIndex) return
+  pagination.page = page
+  refreshData()
+}
+
+const nextPage = () => {
+  if (pagination.totalPages && pagination.page >= pagination.totalPages - 1) return
+  goToPage(pagination.page + 1)
+}
+
+const prevPage = () => {
+  if (pagination.page <= 0) return
+  goToPage(pagination.page - 1)
+}
 </script>
 
 <template>
@@ -188,25 +261,42 @@ const handleLike = async (item: RecommendItem) => {
       <button
         class="tab"
         :class="{ active: currentFilter === 'all' }"
-        @click="currentFilter = 'all'"
+        @click="setTabFilter('all'); refreshData()"
       >
         전체
       </button>
       <button
         class="tab"
         :class="{ active: currentFilter === 'cafeteria' }"
-        @click="currentFilter = 'cafeteria'"
+        @click="setTabFilter('cafeteria'); refreshData()"
       >
         학식
       </button>
       <button
         class="tab"
         :class="{ active: currentFilter === 'cafe' }"
-        @click="currentFilter = 'cafe'"
+        @click="setTabFilter('cafe'); refreshData()"
       >
         카페
       </button>
     </div>
+
+    <form class="filters" @submit.prevent="handleFilterSubmit">
+      <div class="filter-row">
+        <label>
+          검색
+          <input
+            v-model="filters.q"
+            type="text"
+            placeholder="메뉴 이름 검색"
+            @keyup.enter="handleFilterSubmit"
+          />
+        </label>
+        <button class="apply-btn" type="submit" :disabled="loading">
+          검색
+        </button>
+      </div>
+    </form>
 
     <div v-if="loading" class="sub">불러오는 중...</div>
     <div v-else-if="error" class="sub error">{{ error }}</div>
@@ -225,6 +315,23 @@ const handleLike = async (item: RecommendItem) => {
         </button>
       </li>
     </ul>
+
+    <div v-if="!loading" class="pagination">
+      <button type="button" class="page-btn" :disabled="pagination.page <= 0" @click="prevPage">
+        이전
+      </button>
+      <span class="page-info">
+        {{ pagination.totalPages ? pagination.page + 1 : 0 }} / {{ pagination.totalPages }}
+      </span>
+      <button
+        type="button"
+        class="page-btn"
+        :disabled="pagination.totalPages <= 1 || pagination.page >= pagination.totalPages - 1"
+        @click="nextPage"
+      >
+        다음
+      </button>
+    </div>
   </section>
 </template>
 
@@ -268,6 +375,56 @@ const handleLike = async (item: RecommendItem) => {
 .tab.active {
   background: #ff4e5c;
   color: #fff;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(84, 97, 119, 0.08);
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.filter-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.filter-row input,
+.filter-row select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+}
+
+.apply-btn {
+  justify-self: flex-start;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  background: #ff4e5c;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.apply-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .menu-list {
@@ -327,5 +484,30 @@ const handleLike = async (item: RecommendItem) => {
 .count {
   min-width: 18px;
   text-align: right;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  align-self: flex-end;
+  font-size: 13px;
+}
+
+.page-btn {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-info {
+  color: #6b7280;
 }
 </style>

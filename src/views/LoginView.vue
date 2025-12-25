@@ -127,8 +127,20 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { User as FirebaseAuthUser } from 'firebase/auth'
 import { emailLogin, emailSignup, googleLogin, setAuthPersistence } from '@/firebase/firebase'
-import { apiPost } from '@/utils/api'
+import { apiPost, type ApiError } from '@/utils/api'
+import { setAccessToken, setRefreshToken } from '@/utils/authToken'
 import { AUTH_ERROR_MESSAGES } from '@/utils/authErrorMessages'
+
+type AuthResponse = {
+  userId: number
+  username: string
+  email: string
+  name: string
+  role?: string
+  accessToken: string
+  tokenType: string
+  refreshToken?: string
+}
 
 const router = useRouter()
 const mode = ref<'login' | 'signup'>('login')
@@ -150,7 +162,7 @@ const buildFirebaseLoginPayload = async (
   const idToken = await user.getIdToken()
   const emailLocal = user.email?.split('@')[0]?.trim()
   const uid = user.uid?.trim()
-  const uidShort = uid?.slice(0, 2)
+  const uidShort = uid?.slice(0, 6)
 
   // username은 사람이 읽기 쉬우면서 충돌 가능성을 낮춘다: 이메일 앞부분 + uid 앞자리
   const usernameToSend =
@@ -166,6 +178,19 @@ const persistUserEmail = (emailValue: string | null | undefined) => {
   if (emailValue) {
     localStorage.setItem('ws_user_email', emailValue)
   }
+}
+
+const handleAuthSuccess = (auth: AuthResponse, fallbackEmail?: string | null) => {
+  if (auth?.accessToken) {
+    setAccessToken(auth.accessToken)
+  }
+  setRefreshToken(auth?.refreshToken ?? null)
+  persistUserEmail(auth?.email ?? fallbackEmail)
+}
+
+const resolveApiErrorMessage = (err: unknown, fallback: string) => {
+  const apiErr = err as ApiError
+  return apiErr?.userMessage || apiErr?.message || fallback
 }
 
 const emailButtonLabel = computed(() =>
@@ -207,15 +232,21 @@ const handleGoogleLogin = async () => {
   try {
     const user = await googleLogin()
     const payload = await buildFirebaseLoginPayload(user)
-    await apiPost('/api/auth/firebase-login', payload)
-    persistUserEmail(user.email)
+    const auth = await apiPost<AuthResponse>('/api/auth/firebase-login', payload, { skipAuth: true })
+    handleAuthSuccess(auth, user.email)
     router.push({ name: 'home' })
   } catch (err: unknown) {
     console.error(err)
-    const code = (err as { code?: string } | undefined)?.code
-    errorMsg.value =
-      (code && AUTH_ERROR_MESSAGES[code]) ||
+    const apiMessage = resolveApiErrorMessage(
+      err,
       '구글 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+    )
+    if (apiMessage) {
+      const code = (err as { code?: string } | undefined)?.code
+      errorMsg.value = code && AUTH_ERROR_MESSAGES[code] ? AUTH_ERROR_MESSAGES[code] : apiMessage
+    } else {
+      errorMsg.value = '구글 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+    }
   } finally {
     isGoogleSubmitting.value = false
   }
@@ -248,8 +279,10 @@ const handleEmailSubmit = async () => {
     if (mode.value === 'login') {
       const user = await emailLogin(email.value, password.value)
       const payload = await buildFirebaseLoginPayload(user)
-      await apiPost('/api/auth/firebase-login', payload)
-      persistUserEmail(user.email ?? email.value)
+      const auth = await apiPost<AuthResponse>('/api/auth/firebase-login', payload, {
+        skipAuth: true,
+      })
+      handleAuthSuccess(auth, user.email ?? email.value)
       router.push({ name: 'home' })
     } else {
       const trimmedUsername = username.value.trim()
@@ -271,8 +304,10 @@ const handleEmailSubmit = async () => {
         name: trimmedName,
         phone: trimmedPhone,
       })
-      await apiPost('/api/auth/firebase-login', payload)
-      persistUserEmail(user.email ?? email.value)
+      const auth = await apiPost<AuthResponse>('/api/auth/firebase-login', payload, {
+        skipAuth: true,
+      })
+      handleAuthSuccess(auth, user.email ?? email.value)
 
       alert('인증 메일을 보냈어요. 메일을 확인한 뒤 로그인해 주세요.')
       name.value = ''
@@ -283,9 +318,15 @@ const handleEmailSubmit = async () => {
   } catch (err: unknown) {
     console.error(err)
     const code = (err as { code?: string } | undefined)?.code
-    errorMsg.value =
-      (code && AUTH_ERROR_MESSAGES[code]) ||
+    const apiMessage = resolveApiErrorMessage(
+      err,
       '이메일 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+    )
+    if (code && AUTH_ERROR_MESSAGES[code]) {
+      errorMsg.value = AUTH_ERROR_MESSAGES[code]
+    } else {
+      errorMsg.value = apiMessage
+    }
   } finally {
     isEmailSubmitting.value = false
   }

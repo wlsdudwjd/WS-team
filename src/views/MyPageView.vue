@@ -3,7 +3,8 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { updateEmail, updatePassword } from 'firebase/auth'
 import { auth, logout as firebaseLogout } from '@/firebase/firebase'
-import { apiGet, apiPut } from '@/utils/api'
+import { apiGet, apiPut, type ApiError } from '@/utils/api'
+import { clearAuthTokens } from '@/utils/authToken'
 
 type UserProfileResponse = {
   userId: number
@@ -75,7 +76,9 @@ const loadProfile = async () => {
     profileForm.email = profile.email
   } catch (err) {
     console.error(err)
+    const apiErr = err as ApiError
     profileLoadError.value =
+      apiErr?.userMessage ||
       '프로필을 찾을 수 없습니다. 회원가입으로 계정을 만든 뒤 다시 로그인해 주세요.'
   } finally {
     profileLoading.value = false
@@ -147,7 +150,9 @@ const handleProfileSubmit = async () => {
     showProfileModal.value = false
   } catch (err) {
     console.error(err)
-    errorMessage.value = '프로필 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+    const apiErr = err as ApiError
+    errorMessage.value =
+      apiErr?.userMessage || '프로필 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     profileForm.password = ''
     profileForm.confirmPassword = ''
@@ -162,6 +167,7 @@ const handleLogout = async () => {
   isLoggingOut.value = true
   try {
     await firebaseLogout()
+    clearAuthTokens()
     await router.replace({ name: 'login' })
   } catch (error) {
     logoutError.value =
