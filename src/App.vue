@@ -25,7 +25,7 @@ const showNav = computed(() => route.name !== 'login')
   <div class="app-shell">
     <div class="screen">
       <header class="app-header">
-        <div class="logo-pill">WS</div>
+        <RouterLink class="logo-pill" :to="{ name: 'home' }" aria-label="홈으로 이동">WS</RouterLink>
         <div class="header-actions">
           <RouterLink class="icon-button" aria-label="알림" :to="{ name: 'notifications' }">
             <svg class="bell-icon" viewBox="0 0 24 24" role="img" aria-hidden="true">
@@ -176,6 +176,7 @@ const showNav = computed(() => route.name !== 'login')
   align-items: center;
   justify-content: center;
   letter-spacing: 0.04em;
+  text-decoration: none;
 }
 
 .header-actions {

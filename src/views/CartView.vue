@@ -8,9 +8,10 @@ const cartStore = useCartStore()
 const orderStore = useOrderStore()
 const { items } = storeToRefs(cartStore)
 
-const totalPrice = computed(() =>
-  items.value.reduce((sum, item) => sum + item.price * item.quantity, 0),
-)
+const totalPrice = computed(() => {
+  const list = Array.isArray(items.value) ? items.value : []
+  return list.reduce((sum, item) => sum + item.price * item.quantity, 0)
+})
 
 const handleCheckout = () => {
   if (!items.value.length) return

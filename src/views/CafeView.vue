@@ -153,6 +153,15 @@ const goToOrders = () => {
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.recent-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 40px rgba(84, 97, 119, 0.18);
+  background: #fdfdfd;
+  cursor: pointer;
 }
 
 .cafe-icon {
@@ -203,6 +212,15 @@ const goToOrders = () => {
   border-radius: 22px;
   background: #fff;
   box-shadow: 0 12px 24px rgba(84, 97, 119, 0.12);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  cursor: pointer;
+}
+
+.store-row:hover {
+  background: #f8fafc;
+  box-shadow: 0 14px 28px rgba(84, 97, 119, 0.16);
+  transform: translateY(-1px);
+  cursor: pointer;
 }
 
 .store-left {

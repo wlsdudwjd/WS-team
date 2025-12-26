@@ -4,9 +4,12 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 
 const recentStore = {
+  id: 0,
   name: '전북대 후생관 식당',
   subtitle: '후생관',
   status: '최근 주문',
+  theme: 'primary',
+  link: '/cafeteria/huseng',
 }
 
 const stores = [
@@ -71,7 +74,7 @@ const goToOrders = () => {
     <section aria-labelledby="recent-heading" class="recent-section">
       <h2 id="recent-heading">최근 주문한 매장</h2>
 
-      <article class="recent-card">
+      <article class="recent-card" role="button" tabindex="0" @click="handleStoreClick(recentStore)">
         <div class="store-icon large" aria-hidden="true">🍽️</div>
         <div class="store-copy">
           <h3>{{ recentStore.name }}</h3>
@@ -152,6 +155,18 @@ const goToOrders = () => {
   display: flex;
   align-items: center;
   gap: 18px;
+  padding: 8px 0;
+  cursor: pointer;
+  border-radius: 20px;
+  padding: 12px 10px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.recent-card:hover,
+.recent-card:focus-visible {
+  background: #f8fafc;
+  box-shadow: 0 10px 22px rgba(84, 97, 119, 0.14);
+  transform: translateY(-1px);
 }
 
 .store-icon {
@@ -208,6 +223,15 @@ const goToOrders = () => {
   padding: 12px 0;
   cursor: pointer;
   text-align: left;
+  border-radius: 16px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.store-row:hover {
+  background: #f8fafc;
+  box-shadow: 0 12px 24px rgba(84, 97, 119, 0.12);
+  transform: translateY(-1px);
+  cursor: pointer;
 }
 
 .store-left {

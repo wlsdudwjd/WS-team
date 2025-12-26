@@ -132,11 +132,12 @@ const buildQueryParams = () => {
   return params.toString()
 }
 
-const fetchMenus = async () => {
+const fetchMenus = async (fallbackTried = false) => {
   const query = buildQueryParams()
-  const data = await apiGet<MenuPageResponse>(`/api/menus?${query}`)
+  const res = await apiGet<MenuPageResponse | MenuResponse[]>(`/api/menus?${query}`)
+  const list = Array.isArray(res) ? res : Array.isArray(res?.content) ? res.content ?? [] : []
 
-  menus.value = (data.content ?? []).map((menu) => {
+  menus.value = list.map((menu) => {
     const serviceName = menu.store?.serviceType?.name?.toLowerCase() ?? ''
     const serviceTypeId = menu.store?.serviceType?.serviceTypeId
     const kind: MenuKind =
@@ -152,25 +153,42 @@ const fetchMenus = async () => {
     }
   })
 
-  pagination.totalPages = data.totalPages ?? (menus.value.length ? 1 : 0)
-  pagination.totalElements = data.totalElements ?? menus.value.length
-  pagination.page = data.number ?? pagination.page
-  pagination.size = data.size ?? pagination.size
+  if (Array.isArray(res)) {
+    pagination.totalPages = menus.value.length ? 1 : 0
+    pagination.totalElements = menus.value.length
+  } else {
+    pagination.totalPages = res.totalPages ?? (menus.value.length ? 1 : 0)
+    pagination.totalElements = res.totalElements ?? menus.value.length
+    pagination.page = res.number ?? pagination.page
+    pagination.size = res.size ?? pagination.size
+  }
+
+  // 필터로 인해 비어 있을 때 한 번만 serviceTypeId 없이 재시도
+  if (!fallbackTried && menus.value.length === 0 && filters.serviceTypeId) {
+    const prevServiceType = filters.serviceTypeId
+    filters.serviceTypeId = ''
+    await fetchMenus(true)
+    filters.serviceTypeId = prevServiceType
+  }
 }
 
 const fetchLikeStatuses = async () => {
   if (!menus.value.length) return
   const ids = menus.value.map((m) => m.menuId).join(',')
-  const data = await apiGet<MenuLikeStatus[]>(
-    `/api/menu-likes/status?userEmail=${encodeURIComponent(userEmail.value)}&menuIds=${ids}`,
+  const res = await apiGet<MenuLikeStatus[] | { content?: MenuLikeStatus[] }>(
+    `/api/menu-likes/status?userEmail=${encodeURIComponent(userEmail.value)}&menuIds=${ids}`
   )
-  likeStatuses.value = data.reduce<Record<number, MenuLikeStatus>>((acc, row) => {
+  const data = Array.isArray(res) ? res : Array.isArray(res?.content) ? res.content ?? [] : []
+
+  const rows = Array.isArray(data) ? data : []
+
+  likeStatuses.value = rows.reduce<Record<number, MenuLikeStatus>>((acc, row) => {
     acc[row.menuId] = row
     return acc
   }, {})
 
   // 서버가 내려준 “내가 누른 횟수”를 개인 카운트로 반영
-  myLikeCounts.value = data.reduce<Record<number, number>>((acc, row) => {
+  myLikeCounts.value = rows.reduce<Record<number, number>>((acc, row) => {
     acc[row.menuId] = row.totalLikes ?? 0
     return acc
   }, {})

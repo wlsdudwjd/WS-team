@@ -55,8 +55,10 @@ const topError = ref<string | null>(null)
 const storeTypeById = ref<Record<number, string>>({})
 
 const fetchStores = async () => {
-  const data = await apiGet<StoreResponse[]>('/api/stores')
-  storeTypeById.value = data.reduce<Record<number, string>>((acc, store) => {
+  const data = await apiGet<StoreResponse[] | { content?: StoreResponse[] }>('/api/stores')
+  const list = Array.isArray(data) ? data : Array.isArray(data?.content) ? data.content ?? [] : []
+
+  storeTypeById.value = list.reduce<Record<number, string>>((acc, store) => {
     acc[store.storeId] = store.serviceType?.name ?? ''
     return acc
   }, {})
@@ -67,14 +69,19 @@ const fetchTopMenus = async () => {
   topError.value = null
   try {
     await fetchStores()
-    const data = await apiGet<PopularMenuResponse[]>('/api/menu-likes/top?limit=5')
+    const data = await apiGet<PopularMenuResponse[] | { content?: PopularMenuResponse[] }>(
+      '/api/menu-likes/top?limit=5'
+    )
+    const list = Array.isArray(data) ? data : Array.isArray(data?.content) ? data.content ?? [] : []
 
     const cafes: RankItem[] = []
     const cafeterias: RankItem[] = []
 
-    data.forEach((item) => {
+    list.forEach((item) => {
       const serviceType = item.storeId ? storeTypeById.value[item.storeId] : ''
-      const target = serviceType?.toLowerCase().includes('cafeteria') ? cafeterias : cafes
+      const isCafeteria =
+        serviceType?.toLowerCase().includes('cafeteria') || serviceType === '학식'
+      const target = isCafeteria ? cafeterias : cafes
       target.push({
         name: item.name,
         likes: item.likeCount ?? 0,
